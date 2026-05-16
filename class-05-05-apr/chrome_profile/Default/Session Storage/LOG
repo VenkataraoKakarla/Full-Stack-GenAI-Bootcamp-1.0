@@ -1,6 +1,15 @@
-2026/04/18-12:55:44.470 26a8 Reusing MANIFEST D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Session Storage/MANIFEST-000001
-2026/04/18-12:55:44.472 26a8 Recovering log #33
-2026/04/18-12:55:44.477 26a8 Reusing old log D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Session Storage/000033.log 
-2026/04/18-12:56:46.859 26a8 Level-0 table #37: started
-2026/04/18-12:56:46.913 26a8 Level-0 table #37: 17476 bytes OK
-2026/04/18-12:56:46.917 26a8 Delete type=0 #33
+2026/04/18-15:21:46.498 f9c Reusing MANIFEST D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Session Storage/MANIFEST-000001
+2026/04/18-15:21:46.499 f9c Recovering log #39
+2026/04/18-15:21:46.501 f9c Reusing old log D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Session Storage/000039.log 
+2026/04/18-15:30:48.239 4df4 Level-0 table #43: started
+2026/04/18-15:30:48.287 4df4 Level-0 table #43: 17510 bytes OK
+2026/04/18-15:30:48.290 4df4 Delete type=0 #39
+2026/04/18-15:30:48.291 4df4 Compacting 4@0 + 1@1 files
+2026/04/18-15:30:48.296 4df4 Generated table #44@0: 395 keys, 9500 bytes
+2026/04/18-15:30:48.297 4df4 Compacted 4@0 + 1@1 files => 9500 bytes
+2026/04/18-15:30:48.297 4df4 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/04/18-15:30:48.298 4df4 Delete type=2 #31
+2026/04/18-15:30:48.298 4df4 Delete type=2 #34
+2026/04/18-15:30:48.298 4df4 Delete type=2 #37
+2026/04/18-15:30:48.298 4df4 Delete type=2 #40
+2026/04/18-15:30:48.298 4df4 Delete type=2 #43

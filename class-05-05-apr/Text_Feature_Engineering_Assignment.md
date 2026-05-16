@@ -19,7 +19,7 @@ Minimum **100 reviews** scraped from **Amazon.in** and **Flipkart**, stored as C
 |---|---|
 | Library | `undetected-chromedriver`, `selenium`, `BeautifulSoup` |
 | Target | 500 reviews per platform (1000 total) |
-| Sources | Amazon.in (dynamic ASIN discovery) + Flipkart (5 products) |
+| Sources | Amazon.in (dynamic ASIN discovery) + Flipkart (dynamic product discovery) |
 | Output files | `amazon_reviews.csv`, `flipkart_reviews.csv`, `all_reviews.csv` |
 | Bot detection | Persistent Chrome profile; script pauses for manual login/CAPTCHA |
 
@@ -49,21 +49,25 @@ Minimum **100 reviews** scraped from **Amazon.in** and **Flipkart**, stored as C
 
 ### Flipkart — How it works
 
-1. Opens each product's review URL directly
-2. Paginates through review pages
-3. Anchors on star-rating divs (1–5), walks up the DOM to find review cards
-4. Deduplicates reviews by `review_text`
-5. If CAPTCHA appears, script pauses — you solve it once, then press ENTER
+1. Searches Flipkart for each query in `FLIPKART_SEARCH_QUERIES`
+2. Opens each product page, extracts the live "All Reviews" URL dynamically
+3. Paginates through review pages for each discovered product
+4. Anchors on "Certified Buyer" markers, walks up the DOM to find review cards
+5. Deduplicates reviews by `review_text`
+6. If CAPTCHA appears, script pauses — you solve it once, then press ENTER
 
-**Products hardcoded:**
+**Search queries used:**
 
-| Product | Source |
-|---|---|
-| Samsung Galaxy M14 5G | Flipkart |
-| OnePlus Nord CE 3 Lite | Flipkart |
-| Redmi Note 13 5G | Flipkart |
-| boAt Airdopes 141 | Flipkart |
-| HP 15s Laptop | Flipkart |
+| Query |
+|---|
+| samsung galaxy smartphone |
+| oneplus nord smartphone |
+| redmi note 5g phone |
+| boat airdopes earbuds |
+| noise colorfit smartwatch |
+| realme narzo phone |
+| hp laptop |
+| lenovo ideapad laptop |
 
 ---
 
@@ -76,7 +80,8 @@ Minimum **100 reviews** scraped from **Amazon.in** and **Flipkart**, stored as C
 | `_parse_amazon_page(driver, product)` | Extracts rating, title, body, author, date from Amazon review cards |
 | `scrape_amazon(target)` | Full Amazon flow: discover ASINs → paginate → collect reviews |
 | `_parse_flipkart_page(driver, product)` | Structural DOM extraction for Flipkart review cards |
-| `scrape_flipkart(target)` | Full Flipkart flow: paginate product URLs → collect reviews |
+| `_discover_flipkart_products(driver, query)` | Searches Flipkart, opens product pages, extracts live review URLs |
+| `scrape_flipkart(target)` | Full Flipkart flow: discover products → paginate → collect reviews |
 | `wait_for_user(message)` | Pauses script for manual login/CAPTCHA resolution |
 | `is_amazon_blocked(driver)` | Detects Amazon sign-in wall or CAPTCHA |
 | `is_flipkart_blocked(driver)` | Detects Flipkart reCAPTCHA / verification page |
@@ -168,5 +173,7 @@ pip install scikit-learn pandas nltk
 python scraper.py
 ```
 
+- Scrapes **Amazon first**, then **Flipkart** — both fresh every run.
+- Each platform saves its own CSV (`amazon_reviews.csv`, `flipkart_reviews.csv`), then both are merged into `all_reviews.csv`.
 - On the **first run**, if Amazon or Flipkart shows a login/CAPTCHA page, the script **pauses** and prints a message. Solve it manually in the open browser, then press **ENTER** to continue.
 - On **subsequent runs**, the saved Chrome profile reuses your session automatically — no manual steps needed.

@@ -1,3 +1,6 @@
-2026/04/18-12:35:30.572 4920 Reusing MANIFEST D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Session Storage/MANIFEST-000001
-2026/04/18-12:35:30.574 4920 Recovering log #33
-2026/04/18-12:35:30.577 4920 Reusing old log D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Session Storage/000033.log 
+2026/04/18-15:05:26.192 4e64 Reusing MANIFEST D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Session Storage/MANIFEST-000001
+2026/04/18-15:05:26.194 4e64 Recovering log #36
+2026/04/18-15:05:26.196 4e64 Reusing old log D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Session Storage/000036.log 
+2026/04/18-15:07:27.913 4e64 Level-0 table #40: started
+2026/04/18-15:07:27.922 4e64 Level-0 table #40: 20684 bytes OK
+2026/04/18-15:07:27.926 4e64 Delete type=0 #36

@@ -1,3 +1,18 @@
-2026/04/18-12:35:30.419 4920 Reusing MANIFEST D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Local Storage\leveldb/MANIFEST-000001
-2026/04/18-12:35:30.427 4920 Recovering log #13
-2026/04/18-12:35:30.430 4920 Reusing old log D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Local Storage\leveldb/000013.log 
+2026/04/18-15:05:26.118 4e64 Reusing MANIFEST D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Local Storage\leveldb/MANIFEST-000001
+2026/04/18-15:05:26.123 4e64 Recovering log #16
+2026/04/18-15:05:26.124 4e64 Reusing old log D:\Full-Stack-GenAI-Bootcamp-1.0\class-05-05-apr\chrome_profile\Default\Local Storage\leveldb/000016.log 
+2026/04/18-15:08:27.924 5238 Level-0 table #20: started
+2026/04/18-15:08:27.970 5238 Level-0 table #20: 66133 bytes OK
+2026/04/18-15:08:27.973 5238 Delete type=0 #16
+2026/04/18-15:08:27.974 5238 Compacting 4@0 + 1@1 files
+2026/04/18-15:08:27.978 5238 Generated table #21@0: 1313 keys, 102255 bytes
+2026/04/18-15:08:27.978 5238 Compacted 4@0 + 1@1 files => 102255 bytes
+2026/04/18-15:08:27.979 5238 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/04/18-15:08:27.979 5238 Delete type=2 #8
+2026/04/18-15:08:27.980 5238 Delete type=2 #10
+2026/04/18-15:08:27.980 5238 Delete type=2 #14
+2026/04/18-15:08:27.980 5238 Delete type=2 #17
+2026/04/18-15:08:27.980 5238 Delete type=2 #20
+2026/04/18-15:18:27.918 5238 Level-0 table #23: started
+2026/04/18-15:18:27.924 5238 Level-0 table #23: 69817 bytes OK
+2026/04/18-15:18:27.926 5238 Delete type=0 #19

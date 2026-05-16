@@ -530,36 +530,23 @@ def scrape_flipkart(target: int = 500) -> list[Review]:
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    # Amazon already scraped — only run Flipkart
-    log.info("=== Flipkart scrape (target=%d) ===", TARGET_PER_PLATFORM)
     log.info("Chrome profile: %s", CHROME_PROFILE_DIR)
+
+    log.info("=== Amazon scrape (target=%d) ===", TARGET_PER_PLATFORM)
+    amazon_reviews = scrape_amazon(TARGET_PER_PLATFORM)
+    save_csv(amazon_reviews, os.path.join(OUTPUT_DIR, "amazon_reviews.csv"))
+    log.info("Amazon collected: %d", len(amazon_reviews))
+
+    log.info("=== Flipkart scrape (target=%d) ===", TARGET_PER_PLATFORM)
     flipkart_reviews = scrape_flipkart(TARGET_PER_PLATFORM)
     save_csv(flipkart_reviews, os.path.join(OUTPUT_DIR, "flipkart_reviews.csv"))
     log.info("Flipkart collected: %d", len(flipkart_reviews))
 
-    # Merge with existing Amazon reviews if available
-    amazon_path = os.path.join(OUTPUT_DIR, "amazon_reviews.csv")
-    amazon_reviews = []
-    if os.path.exists(amazon_path):
-        import csv as _csv
-        with open(amazon_path, encoding="utf-8") as f:
-            reader = _csv.DictReader(f)
-            for row in reader:
-                amazon_reviews.append(row)
-        log.info("Loaded %d existing Amazon reviews from %s", len(amazon_reviews), amazon_path)
-
-    # Save combined CSV
+    all_reviews = amazon_reviews + flipkart_reviews
     all_path = os.path.join(OUTPUT_DIR, "all_reviews.csv")
-    with open(all_path, "w", newline="", encoding="utf-8") as f:
-        writer = _csv.DictWriter(f, fieldnames=[field.name for field in fields(Review)])
-        writer.writeheader()
-        for row in amazon_reviews:
-            writer.writerow(row)
-        for r in flipkart_reviews:
-            writer.writerow(asdict(r))
+    save_csv(all_reviews, all_path)
     log.info("Combined CSV saved → %s  (Amazon=%d | Flipkart=%d | Total=%d)",
-             all_path, len(amazon_reviews), len(flipkart_reviews),
-             len(amazon_reviews) + len(flipkart_reviews))
+             all_path, len(amazon_reviews), len(flipkart_reviews), len(all_reviews))
 
 
 if __name__ == "__main__":

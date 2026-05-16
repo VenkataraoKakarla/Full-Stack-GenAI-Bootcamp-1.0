@@ -3,3 +3,6 @@ D:\>D:\Full-Stack-GenAI-Bootcamp-1.0\env\Scripts\activate.bat
 uv pip install -r requirements.txt
 
 cd D:\Full-Stack-GenAI-Bootcamp-1.0\class-06-07-11-12-apr
+
+>>> cd D:\Full-Stack-GenAI-Bootcamp-1.0\class-16-16-may-2026
+>>> D:\Full-Stack-GenAI-Bootcamp-1.0\.venv\Scripts\activate.bat
