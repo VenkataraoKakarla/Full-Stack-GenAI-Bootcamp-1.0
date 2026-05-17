@@ -1,4 +1,12 @@
-D:\>D:\Full-Stack-GenAI-Bootcamp-1.0\env\Scripts\activate.bat
+
+uv python list
+
+uv venv D:\Full-Stack-GenAI-Bootcamp-1.0\env-3.11 --python 3.11
+
+
+D:\Full-Stack-GenAI-Bootcamp-1.0\env\Scripts\activate.bat
+D:\Full-Stack-GenAI-Bootcamp-1.0\env-3.11\Scripts\activate.bat
+
 
 uv pip install -r requirements.txt
 
@@ -6,3 +14,18 @@ cd D:\Full-Stack-GenAI-Bootcamp-1.0\class-06-07-11-12-apr
 
 >>> cd D:\Full-Stack-GenAI-Bootcamp-1.0\class-16-16-may-2026
 >>> D:\Full-Stack-GenAI-Bootcamp-1.0\.venv\Scripts\activate.bat
+
+
+
+If the remote already points to your GitHub repo, just run:
+
+git add .
+git commit -m "sync local changes"
+git push
+If the remote is missing or wrong, set it first:
+
+
+git remote set-url origin https://github.com/VenkataraoKakarla/Full-Stack-GenAI-Bootcamp-1.0.git
+git add .
+git commit -m "sync local changes"
+git push
