@@ -1,5 +1,7 @@
 import os
+import re
 import time
+import base64
 import tempfile
 import requests
 from io import BytesIO
@@ -13,7 +15,7 @@ from google import genai
 import ollama as ollama_client
 
 # ---------------------------------------------------------------------------
-# Load API keys from root .env
+# Config
 # ---------------------------------------------------------------------------
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
@@ -22,7 +24,6 @@ gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Groq — free key from console.groq.com, add GROQ_API_KEY to .env
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 groq_client = openai.OpenAI(
     api_key=GROQ_API_KEY or "not-set",
@@ -30,232 +31,266 @@ groq_client = openai.OpenAI(
 ) if GROQ_API_KEY else None
 
 # ---------------------------------------------------------------------------
-# Modality 1 — Text → Text  (OpenAI GPT-4o-mini)
+# Model Registries  {display label: (provider, model_id)}
 # ---------------------------------------------------------------------------
-def text_to_text(prompt: str) -> str:
+T2T_MODELS = {
+    "GPT-4o-mini  (OpenAI)":                ("openai",      "gpt-4o-mini"),
+    "GPT-4o  (OpenAI)":                      ("openai",      "gpt-4o"),
+    "Gemini 1.5 Flash  (Google)":            ("gemini",      "gemini-1.5-flash"),
+    "Gemini 1.5 Pro  (Google)":              ("gemini",      "gemini-1.5-pro"),
+    "Grok Beta  (xAI via OpenRouter)":       ("openrouter",  "x-ai/grok-beta"),
+    "Llama 3.1 8B free  (OpenRouter)":       ("openrouter",  "meta-llama/llama-3.1-8b-instruct:free"),
+    "Llama 3.2  (Ollama — local)":           ("ollama",      "llama3.2"),
+    "Qwen 2.5  (Ollama — local)":            ("ollama",      "qwen2.5"),
+    "DeepSeek R1  (Ollama — local)":         ("ollama",      "deepseek-r1"),
+    "Nemotron Super  (Ollama — cloud)":      ("ollama",      "nemotron-3-super:cloud"),
+}
+
+T2I_MODELS = {
+    "DALL-E 3  (OpenAI)":   ("openai", "dall-e-3"),
+    "DALL-E 2  (OpenAI)":   ("openai", "dall-e-2"),
+}
+
+I2T_MODELS = {
+    "Gemini 1.5 Flash  (Google)":   ("gemini", "gemini-1.5-flash"),
+    "Gemini 1.5 Pro  (Google)":     ("gemini", "gemini-1.5-pro"),
+    "GPT-4o  (OpenAI vision)":      ("openai", "gpt-4o"),
+    "GPT-4o-mini  (OpenAI vision)": ("openai", "gpt-4o-mini"),
+}
+
+# value format  "tts_model:voice"
+T2A_MODELS = {
+    "TTS-1 · Nova  (OpenAI)":       ("openai", "tts-1:nova"),
+    "TTS-1 · Alloy  (OpenAI)":      ("openai", "tts-1:alloy"),
+    "TTS-1 · Shimmer  (OpenAI)":    ("openai", "tts-1:shimmer"),
+    "TTS-1 · Echo  (OpenAI)":       ("openai", "tts-1:echo"),
+    "TTS-1 · Fable  (OpenAI)":      ("openai", "tts-1:fable"),
+    "TTS-1 · Onyx  (OpenAI)":       ("openai", "tts-1:onyx"),
+    "TTS-1-HD · Nova  (OpenAI)":    ("openai", "tts-1-hd:nova"),
+    "TTS-1-HD · Alloy  (OpenAI)":   ("openai", "tts-1-hd:alloy"),
+}
+
+A2T_MODELS = {
+    "Whisper-1  (OpenAI)":                      ("openai", "whisper-1"),
+    "Whisper Large v3  (Groq — fast)":           ("groq",   "whisper-large-v3"),
+    "Whisper Large v3 Turbo  (Groq — fastest)":  ("groq",   "whisper-large-v3-turbo"),
+}
+
+T2V_MODELS = {
+    "minimax/video-01  (OpenRouter)": ("openrouter", "minimax/video-01"),
+}
+
+V2T_MODELS = {
+    "Gemini 1.5 Pro  (Google)":   ("gemini", "gemini-1.5-pro"),
+    "Gemini 1.5 Flash  (Google)": ("gemini", "gemini-1.5-flash"),
+}
+
+# ---------------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------------
+def _pil_to_b64(image: Image.Image) -> str:
+    buf = BytesIO()
+    image.save(buf, format="JPEG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+# ---------------------------------------------------------------------------
+# Modality 1 — Text → Text
+# ---------------------------------------------------------------------------
+def run_text_to_text(prompt: str, model_label: str) -> str:
     if not prompt.strip():
         return "Please enter a prompt."
+    provider, model_id = T2T_MODELS[model_label]
     try:
-        resp = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return resp.choices[0].message.content
+        if provider == "openai":
+            resp = openai_client.chat.completions.create(
+                model=model_id,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return resp.choices[0].message.content
+
+        elif provider == "gemini":
+            resp = gemini_client.models.generate_content(model=model_id, contents=prompt)
+            return resp.text
+
+        elif provider == "openrouter":
+            r = requests.post(OPENROUTER_URL, headers={
+                "Authorization": f"Bearer {OPENROUTER_KEY}",
+                "Content-Type": "application/json",
+            }, json={"model": model_id, "messages": [{"role": "user", "content": prompt}]}, timeout=60)
+            data = r.json()
+            if "choices" not in data:
+                return f"Error: {data}"
+            return data["choices"][0]["message"]["content"]
+
+        elif provider == "ollama":
+            resp = ollama_client.chat(
+                model=model_id,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return resp.message.content
+
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error ({model_label}): {e}"
 
 
 # ---------------------------------------------------------------------------
-# Modality 2 — Text → Image  (OpenAI DALL-E 3)
+# Modality 2 — Text → Image
 # ---------------------------------------------------------------------------
-def text_to_image(prompt: str):
+def run_text_to_image(prompt: str, model_label: str):
     if not prompt.strip():
         return None
+    provider, model_id = T2I_MODELS[model_label]
     try:
-        resp = openai_client.images.generate(
-            model="dall-e-3",
-            prompt=prompt,
-            size="1024x1024",
-            n=1,
-        )
-        img_bytes = requests.get(resp.data[0].url).content
-        return Image.open(BytesIO(img_bytes))
+        if provider == "openai":
+            size = "1024x1024" if model_id == "dall-e-3" else "512x512"
+            resp = openai_client.images.generate(model=model_id, prompt=prompt, size=size, n=1)
+            img_bytes = requests.get(resp.data[0].url).content
+            return Image.open(BytesIO(img_bytes))
     except Exception as e:
         print(f"Error: {e}")
         return None
 
 
 # ---------------------------------------------------------------------------
-# Modality 3 — Image → Text  (Google Gemini 1.5 Flash)
+# Modality 3 — Image → Text
 # ---------------------------------------------------------------------------
-def image_to_text(image) -> str:
+def run_image_to_text(image, model_label: str) -> str:
     if image is None:
         return "Please upload an image."
+    provider, model_id = I2T_MODELS[model_label]
     try:
-        resp = gemini_client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=["Describe this image in detail.", image],
-        )
-        return resp.text
+        if provider == "gemini":
+            resp = gemini_client.models.generate_content(
+                model=model_id,
+                contents=["Describe this image in detail.", image],
+            )
+            return resp.text
+
+        elif provider == "openai":
+            b64 = _pil_to_b64(image)
+            resp = openai_client.chat.completions.create(
+                model=model_id,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Describe this image in detail."},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
+                    ],
+                }],
+            )
+            return resp.choices[0].message.content
+
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error ({model_label}): {e}"
 
 
 # ---------------------------------------------------------------------------
-# Modality 4 — Text → Audio  (OpenAI TTS-1, Nova voice)
+# Modality 4 — Text → Audio
 # ---------------------------------------------------------------------------
-def text_to_audio(text: str):
+def run_text_to_audio(text: str, model_label: str):
     if not text.strip():
         return None
+    provider, model_voice = T2A_MODELS[model_label]
+    tts_model, voice = model_voice.split(":")
     try:
-        resp = openai_client.audio.speech.create(
-            model="tts-1",
-            voice="nova",
-            input=text,
-        )
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-        tmp.write(resp.content)
-        return tmp.name
+        if provider == "openai":
+            resp = openai_client.audio.speech.create(model=tts_model, voice=voice, input=text)
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+            tmp.write(resp.content)
+            return tmp.name
     except Exception as e:
         print(f"Error: {e}")
         return None
 
 
 # ---------------------------------------------------------------------------
-# Modality 5 — Audio → Text  (OpenAI Whisper-1)
+# Modality 5 — Audio → Text
 # ---------------------------------------------------------------------------
-def audio_to_text(audio_path: str) -> str:
+def run_audio_to_text(audio_path: str, model_label: str) -> str:
     if audio_path is None:
         return "Please upload or record audio."
+    provider, model_id = A2T_MODELS[model_label]
     try:
-        with open(audio_path, "rb") as f:
-            transcript = openai_client.audio.transcriptions.create(
-                model="whisper-1",
-                file=f,
-            )
-        return transcript.text
+        if provider == "openai":
+            with open(audio_path, "rb") as f:
+                t = openai_client.audio.transcriptions.create(model=model_id, file=f)
+            return t.text
+
+        elif provider == "groq":
+            if groq_client is None:
+                return "GROQ_API_KEY not set — get a free key at https://console.groq.com and add it to .env"
+            with open(audio_path, "rb") as f:
+                t = groq_client.audio.transcriptions.create(model=model_id, file=f)
+            return t.text
+
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error ({model_label}): {e}"
 
 
 # ---------------------------------------------------------------------------
-# Modality 6 — Text → Video  (OpenRouter → minimax/video-01)
+# Modality 6 — Text → Video
 # ---------------------------------------------------------------------------
-def text_to_video(prompt: str):
+def run_text_to_video(prompt: str, model_label: str):
     if not prompt.strip():
         return None
+    provider, model_id = T2V_MODELS[model_label]
     try:
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_KEY}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": "minimax/video-01",
-            "messages": [{"role": "user", "content": prompt}],
-        }
-        resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=120)
-        data = resp.json()
-
-        if "choices" not in data:
-            print(f"Unexpected response: {data}")
+        if provider == "openrouter":
+            r = requests.post(OPENROUTER_URL, headers={
+                "Authorization": f"Bearer {OPENROUTER_KEY}",
+                "Content-Type": "application/json",
+            }, json={"model": model_id, "messages": [{"role": "user", "content": prompt}]}, timeout=120)
+            data = r.json()
+            if "choices" not in data:
+                print(f"Unexpected response: {data}")
+                return None
+            content = data["choices"][0]["message"]["content"]
+            if isinstance(content, str) and content.startswith("http"):
+                vb = requests.get(content, timeout=60).content
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                tmp.write(vb)
+                return tmp.name
+            urls = re.findall(r'https?://\S+\.mp4', content)
+            if urls:
+                vb = requests.get(urls[0], timeout=60).content
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
+                tmp.write(vb)
+                return tmp.name
+            print(f"No video URL in response: {content}")
             return None
-
-        content = data["choices"][0]["message"]["content"]
-
-        # If the model returns a direct video URL, download it
-        if isinstance(content, str) and content.startswith("http"):
-            video_bytes = requests.get(content, timeout=60).content
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-            tmp.write(video_bytes)
-            return tmp.name
-
-        # Some models embed the URL in JSON or markdown — try to extract it
-        import re
-        urls = re.findall(r'https?://\S+\.mp4', content)
-        if urls:
-            video_bytes = requests.get(urls[0], timeout=60).content
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp4")
-            tmp.write(video_bytes)
-            return tmp.name
-
-        print(f"No video URL found in response: {content}")
-        return None
-
     except Exception as e:
         print(f"Error: {e}")
         return None
 
 
 # ---------------------------------------------------------------------------
-# Modality 7 — Video → Text  (Google Gemini 1.5 Pro)
+# Modality 7 — Video → Text
 # ---------------------------------------------------------------------------
-def video_to_text(video_path: str) -> str:
+def run_video_to_text(video_path: str, model_label: str) -> str:
     if video_path is None:
         return "Please upload a video."
+    provider, model_id = V2T_MODELS[model_label]
     try:
-        video_file = gemini_client.files.upload(file=video_path)
-
-        # Wait for Gemini to finish processing the video
-        for _ in range(30):
-            state = getattr(video_file.state, "name", str(video_file.state))
-            if state != "PROCESSING":
-                break
-            time.sleep(3)
-            video_file = gemini_client.files.get(name=video_file.name)
-
-        state = getattr(video_file.state, "name", str(video_file.state))
-        if state == "FAILED":
-            return "Video processing failed. Please try a shorter or smaller video."
-
-        resp = gemini_client.models.generate_content(
-            model="gemini-1.5-pro",
-            contents=[
-                "Summarize this video. Describe what is happening, key details, and any notable moments.",
-                video_file,
-            ],
-        )
-        return resp.text
-    except Exception as e:
-        return f"Error: {e}"
-
-
-# ---------------------------------------------------------------------------
-# Modality 8 — Text → Text  (xAI Grok via OpenRouter)
-# ---------------------------------------------------------------------------
-def text_to_text_grok(prompt: str) -> str:
-    if not prompt.strip():
-        return "Please enter a prompt."
-    try:
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_KEY}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": "x-ai/grok-beta",
-            "messages": [{"role": "user", "content": prompt}],
-        }
-        resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=60)
-        data = resp.json()
-        if "choices" not in data:
-            return f"Error: {data}"
-        return data["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"Error: {e}"
-
-
-# ---------------------------------------------------------------------------
-# Modality 9 — Audio → Text  (Groq Whisper-large-v3 — faster than OpenAI)
-# ---------------------------------------------------------------------------
-def audio_to_text_groq(audio_path: str) -> str:
-    if audio_path is None:
-        return "Please upload or record audio."
-    if groq_client is None:
-        return "GROQ_API_KEY not set. Get a free key at https://console.groq.com and add it to your .env file."
-    try:
-        with open(audio_path, "rb") as f:
-            transcript = groq_client.audio.transcriptions.create(
-                model="whisper-large-v3",
-                file=f,
+        if provider == "gemini":
+            video_file = gemini_client.files.upload(file=video_path)
+            for _ in range(30):
+                state = getattr(video_file.state, "name", str(video_file.state))
+                if state != "PROCESSING":
+                    break
+                time.sleep(3)
+                video_file = gemini_client.files.get(name=video_file.name)
+            if getattr(video_file.state, "name", str(video_file.state)) == "FAILED":
+                return "Video processing failed. Try a shorter/smaller file."
+            resp = gemini_client.models.generate_content(
+                model=model_id,
+                contents=[
+                    "Summarize this video. Describe what is happening, key details, and any notable moments.",
+                    video_file,
+                ],
             )
-        return transcript.text
+            return resp.text
     except Exception as e:
-        return f"Error: {e}"
-
-
-# ---------------------------------------------------------------------------
-# Modality 10 — Text → Text  (Ollama local — llama3.2)
-# ---------------------------------------------------------------------------
-def text_to_text_ollama(prompt: str) -> str:
-    if not prompt.strip():
-        return "Please enter a prompt."
-    try:
-        resp = ollama_client.chat(
-            model="llama3.2",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return resp.message.content
-    except Exception as e:
-        return f"Error: {e}\n\nMake sure Ollama is running (check system tray) and llama3.2 is pulled."
+        return f"Error ({model_label}): {e}"
 
 
 # ---------------------------------------------------------------------------
@@ -265,141 +300,122 @@ with gr.Blocks(title="Multimodal AI Explorer", theme=gr.themes.Soft()) as demo:
 
     gr.Markdown("""
     # Multimodal AI Explorer
-    Explore **10 AI modalities** powered by **OpenAI**, **Google Gemini**, **OpenRouter**, **xAI Grok**, **Groq**, and **Ollama (local)**.
-    | # | Modality | Model | Provider |
-    |---|---|---|---|
-    | 1 | Text → Text | GPT-4o-mini | OpenAI |
-    | 2 | Text → Image | DALL-E 3 | OpenAI |
-    | 3 | Image → Text | Gemini 1.5 Flash | Google |
-    | 4 | Text → Audio | TTS-1 (Nova) | OpenAI |
-    | 5 | Audio → Text | Whisper-1 | OpenAI |
-    | 6 | Text → Video | minimax/video-01 | OpenRouter |
-    | 7 | Video → Text | Gemini 1.5 Pro | Google |
-    | 8 | Text → Text (Grok) | grok-beta | xAI via OpenRouter |
-    | 9 | Audio → Text (Groq) | whisper-large-v3 | Groq |
-    | 10 | Text → Text (Ollama) | llama3.2 | Local / Ollama |
+    Select a **model** from the dropdown in each tab, then run the modality.
+    Providers: **OpenAI · Google Gemini · OpenRouter · xAI Grok · Groq · Ollama (local)**
     """)
 
     with gr.Tabs():
 
-        # --- Tab 1: Text → Text ---
+        # ── Tab 1: Text → Text ──────────────────────────────────────────────
         with gr.Tab("Text → Text"):
-            gr.Markdown("### GPT-4o-mini — Chat / Q&A / Summarization")
             with gr.Row():
-                with gr.Column():
-                    t2t_in = gr.Textbox(label="Your prompt", lines=4,
+                with gr.Column(scale=1):
+                    t2t_model = gr.Dropdown(
+                        choices=list(T2T_MODELS.keys()),
+                        value=list(T2T_MODELS.keys())[0],
+                        label="Model",
+                    )
+                    t2t_in = gr.Textbox(label="Prompt", lines=5,
                                         placeholder="Explain quantum computing in simple terms...")
                     t2t_btn = gr.Button("Generate", variant="primary")
-                with gr.Column():
-                    t2t_out = gr.Textbox(label="Response", lines=10)
-            t2t_btn.click(text_to_text, inputs=t2t_in, outputs=t2t_out)
+                with gr.Column(scale=1):
+                    t2t_out = gr.Textbox(label="Response", lines=12)
+            t2t_btn.click(run_text_to_text, inputs=[t2t_in, t2t_model], outputs=t2t_out)
 
-        # --- Tab 2: Text → Image ---
+        # ── Tab 2: Text → Image ─────────────────────────────────────────────
         with gr.Tab("Text → Image"):
-            gr.Markdown("### DALL-E 3 — AI Image Generation")
             with gr.Row():
-                with gr.Column():
-                    t2i_in = gr.Textbox(label="Image prompt", lines=3,
-                                        placeholder="A futuristic city skyline at sunset, digital art style...")
+                with gr.Column(scale=1):
+                    t2i_model = gr.Dropdown(
+                        choices=list(T2I_MODELS.keys()),
+                        value=list(T2I_MODELS.keys())[0],
+                        label="Model",
+                    )
+                    t2i_in = gr.Textbox(label="Image prompt", lines=4,
+                                        placeholder="A futuristic city at sunset, digital art style...")
                     t2i_btn = gr.Button("Generate Image", variant="primary")
-                with gr.Column():
+                with gr.Column(scale=1):
                     t2i_out = gr.Image(label="Generated Image", type="pil")
-            t2i_btn.click(text_to_image, inputs=t2i_in, outputs=t2i_out)
+            t2i_btn.click(run_text_to_image, inputs=[t2i_in, t2i_model], outputs=t2i_out)
 
-        # --- Tab 3: Image → Text ---
+        # ── Tab 3: Image → Text ─────────────────────────────────────────────
         with gr.Tab("Image → Text"):
-            gr.Markdown("### Gemini 1.5 Flash — Image Captioning & Visual Analysis")
             with gr.Row():
-                with gr.Column():
+                with gr.Column(scale=1):
+                    i2t_model = gr.Dropdown(
+                        choices=list(I2T_MODELS.keys()),
+                        value=list(I2T_MODELS.keys())[0],
+                        label="Model",
+                    )
                     i2t_in = gr.Image(label="Upload Image", type="pil")
                     i2t_btn = gr.Button("Describe Image", variant="primary")
-                with gr.Column():
-                    i2t_out = gr.Textbox(label="Description", lines=10)
-            i2t_btn.click(image_to_text, inputs=i2t_in, outputs=i2t_out)
+                with gr.Column(scale=1):
+                    i2t_out = gr.Textbox(label="Description", lines=12)
+            i2t_btn.click(run_image_to_text, inputs=[i2t_in, i2t_model], outputs=i2t_out)
 
-        # --- Tab 4: Text → Audio ---
+        # ── Tab 4: Text → Audio ─────────────────────────────────────────────
         with gr.Tab("Text → Audio"):
-            gr.Markdown("### TTS-1 (Nova voice) — Text-to-Speech Synthesis")
             with gr.Row():
-                with gr.Column():
-                    t2a_in = gr.Textbox(label="Text to convert", lines=4,
+                with gr.Column(scale=1):
+                    t2a_model = gr.Dropdown(
+                        choices=list(T2A_MODELS.keys()),
+                        value=list(T2A_MODELS.keys())[0],
+                        label="Model / Voice",
+                    )
+                    t2a_in = gr.Textbox(label="Text to speak", lines=4,
                                         placeholder="Hello! Welcome to the multimodal AI explorer...")
                     t2a_btn = gr.Button("Generate Audio", variant="primary")
-                with gr.Column():
+                with gr.Column(scale=1):
                     t2a_out = gr.Audio(label="Generated Audio")
-            t2a_btn.click(text_to_audio, inputs=t2a_in, outputs=t2a_out)
+            t2a_btn.click(run_text_to_audio, inputs=[t2a_in, t2a_model], outputs=t2a_out)
 
-        # --- Tab 5: Audio → Text ---
+        # ── Tab 5: Audio → Text ─────────────────────────────────────────────
         with gr.Tab("Audio → Text"):
-            gr.Markdown("### Whisper-1 — Speech-to-Text Transcription")
             with gr.Row():
-                with gr.Column():
+                with gr.Column(scale=1):
+                    a2t_model = gr.Dropdown(
+                        choices=list(A2T_MODELS.keys()),
+                        value=list(A2T_MODELS.keys())[0],
+                        label="Model",
+                    )
                     a2t_in = gr.Audio(label="Upload or Record Audio", type="filepath")
                     a2t_btn = gr.Button("Transcribe", variant="primary")
-                with gr.Column():
-                    a2t_out = gr.Textbox(label="Transcription", lines=10)
-            a2t_btn.click(audio_to_text, inputs=a2t_in, outputs=a2t_out)
+                with gr.Column(scale=1):
+                    a2t_out = gr.Textbox(label="Transcription", lines=12)
+            a2t_btn.click(run_audio_to_text, inputs=[a2t_in, a2t_model], outputs=a2t_out)
 
-        # --- Tab 6: Text → Video ---
+        # ── Tab 6: Text → Video ─────────────────────────────────────────────
         with gr.Tab("Text → Video"):
-            gr.Markdown("### minimax/video-01 (via OpenRouter) — AI Video Generation")
             with gr.Row():
-                with gr.Column():
-                    t2v_in = gr.Textbox(label="Video prompt", lines=3,
+                with gr.Column(scale=1):
+                    t2v_model = gr.Dropdown(
+                        choices=list(T2V_MODELS.keys()),
+                        value=list(T2V_MODELS.keys())[0],
+                        label="Model",
+                    )
+                    t2v_in = gr.Textbox(label="Video prompt", lines=4,
                                         placeholder="A golden retriever running on a sunny beach...")
                     t2v_btn = gr.Button("Generate Video", variant="primary")
-                    gr.Markdown("_Note: Video generation may take 1–2 minutes._")
-                with gr.Column():
+                    gr.Markdown("_Video generation may take 1–2 minutes._")
+                with gr.Column(scale=1):
                     t2v_out = gr.Video(label="Generated Video")
-            t2v_btn.click(text_to_video, inputs=t2v_in, outputs=t2v_out)
+            t2v_btn.click(run_text_to_video, inputs=[t2v_in, t2v_model], outputs=t2v_out)
 
-        # --- Tab 7: Video → Text ---
+        # ── Tab 7: Video → Text ─────────────────────────────────────────────
         with gr.Tab("Video → Text"):
-            gr.Markdown("### Gemini 1.5 Pro — Video Understanding & Summarization")
             with gr.Row():
-                with gr.Column():
+                with gr.Column(scale=1):
+                    v2t_model = gr.Dropdown(
+                        choices=list(V2T_MODELS.keys()),
+                        value=list(V2T_MODELS.keys())[0],
+                        label="Model",
+                    )
                     v2t_in = gr.Video(label="Upload Video")
                     v2t_btn = gr.Button("Summarize Video", variant="primary")
-                    gr.Markdown("_Note: Larger videos may take a moment to process._")
-                with gr.Column():
+                    gr.Markdown("_Larger videos may take a moment to process._")
+                with gr.Column(scale=1):
                     v2t_out = gr.Textbox(label="Video Summary", lines=12)
-            v2t_btn.click(video_to_text, inputs=v2t_in, outputs=v2t_out)
-
-        # --- Tab 8: Text → Text (Grok via OpenRouter) ---
-        with gr.Tab("Text → Text (Grok)"):
-            gr.Markdown("### xAI Grok-beta (via OpenRouter) — Reasoning & Chat\n_Uses your existing OpenRouter key — no extra signup needed._")
-            with gr.Row():
-                with gr.Column():
-                    grok_in = gr.Textbox(label="Your prompt", lines=4,
-                                         placeholder="What's the difference between Grok and GPT-4o?")
-                    grok_btn = gr.Button("Ask Grok", variant="primary")
-                with gr.Column():
-                    grok_out = gr.Textbox(label="Grok Response", lines=10)
-            grok_btn.click(text_to_text_grok, inputs=grok_in, outputs=grok_out)
-
-        # --- Tab 9: Audio → Text (Groq fast Whisper) ---
-        with gr.Tab("Audio → Text (Groq)"):
-            gr.Markdown("""### Groq — whisper-large-v3 (Ultra-fast Transcription)
-_Requires a free `GROQ_API_KEY` from [console.groq.com](https://console.groq.com) — add it to your `.env` file._""")
-            with gr.Row():
-                with gr.Column():
-                    groq_audio_in = gr.Audio(label="Upload or Record Audio", type="filepath")
-                    groq_audio_btn = gr.Button("Transcribe with Groq", variant="primary")
-                with gr.Column():
-                    groq_audio_out = gr.Textbox(label="Transcription", lines=10)
-            groq_audio_btn.click(audio_to_text_groq, inputs=groq_audio_in, outputs=groq_audio_out)
-
-        # --- Tab 10: Text → Text (Ollama local) ---
-        with gr.Tab("Text → Text (Ollama)"):
-            gr.Markdown("### llama3.2 — Local Inference via Ollama (no API key needed)\n_Runs entirely on your machine. Make sure Ollama is running in the system tray._")
-            with gr.Row():
-                with gr.Column():
-                    ollama_in = gr.Textbox(label="Your prompt", lines=4,
-                                           placeholder="Tell me a fun fact about space...")
-                    ollama_btn = gr.Button("Ask Llama 3.2", variant="primary")
-                with gr.Column():
-                    ollama_out = gr.Textbox(label="Response", lines=10)
-            ollama_btn.click(text_to_text_ollama, inputs=ollama_in, outputs=ollama_out)
+            v2t_btn.click(run_video_to_text, inputs=[v2t_in, v2t_model], outputs=v2t_out)
 
 if __name__ == "__main__":
     demo.launch(share=False)
