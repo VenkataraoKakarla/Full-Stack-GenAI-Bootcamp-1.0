@@ -14,3 +14,9 @@ ipykernel
 langchain_google_genai
 langchain-openai
 nltk
+gradio>=4.0.0
+openai>=1.0.0
+google-generativeai>=0.7.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+Pillow>=10.0.0
