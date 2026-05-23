@@ -18,7 +18,8 @@ from huggingface_hub import InferenceClient
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
+_env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=_env_path if _env_path.exists() else None)
 
 openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
