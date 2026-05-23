@@ -13,6 +13,7 @@ from PIL import Image
 import openai
 from google import genai
 import ollama as ollama_client
+from huggingface_hub import InferenceClient
 
 # ---------------------------------------------------------------------------
 # Config
@@ -30,34 +31,45 @@ groq_client = openai.OpenAI(
     base_url="https://api.groq.com/openai/v1",
 ) if GROQ_API_KEY else None
 
+HF_TOKEN = os.getenv("HUGGINGFACE_API_KEY")
+hf_client = InferenceClient(token=HF_TOKEN) if HF_TOKEN else None
+
 # ---------------------------------------------------------------------------
 # Model Registries  {display label: (provider, model_id)}
 # ---------------------------------------------------------------------------
 T2T_MODELS = {
-    "GPT-4o-mini  (OpenAI)":                ("openai",      "gpt-4o-mini"),
-    "GPT-4o  (OpenAI)":                      ("openai",      "gpt-4o"),
-    "Gemini 1.5 Flash  (Google)":            ("gemini",      "gemini-1.5-flash"),
-    "Gemini 1.5 Pro  (Google)":              ("gemini",      "gemini-1.5-pro"),
-    "Grok Beta  (xAI via OpenRouter)":       ("openrouter",  "x-ai/grok-beta"),
-    "Llama 3.1 8B free  (OpenRouter)":       ("openrouter",  "meta-llama/llama-3.1-8b-instruct:free"),
-    "Llama 3.2  (Ollama — local)":           ("ollama",      "llama3.2"),
-    "Qwen 2.5  (Ollama — local)":            ("ollama",      "qwen2.5"),
-    "DeepSeek R1  (Ollama — local)":         ("ollama",      "deepseek-r1"),
-    "Nemotron Super  (Ollama — cloud)":      ("ollama",      "nemotron-3-super:cloud"),
+    "GPT-4o-mini  (OpenAI)":                    ("openai",      "gpt-4o-mini"),
+    "GPT-4o  (OpenAI)":                          ("openai",      "gpt-4o"),
+    "Gemini 1.5 Flash  (Google)":                ("gemini",      "gemini-1.5-flash"),
+    "Gemini 1.5 Pro  (Google)":                  ("gemini",      "gemini-1.5-pro"),
+    "Grok Beta  (xAI via OpenRouter)":           ("openrouter",  "x-ai/grok-beta"),
+    "Llama 3.1 8B free  (OpenRouter)":           ("openrouter",  "meta-llama/llama-3.1-8b-instruct:free"),
+    "Llama 3.2  (Ollama — local)":               ("ollama",      "llama3.2"),
+    "Qwen 2.5  (Ollama — local)":                ("ollama",      "qwen2.5"),
+    "DeepSeek R1  (Ollama — local)":             ("ollama",      "deepseek-r1"),
+    "Nemotron Super  (Ollama — cloud)":          ("ollama",      "nemotron-3-super:cloud"),
+    "Mistral 7B Instruct  (HuggingFace)":        ("hf",          "mistralai/Mistral-7B-Instruct-v0.3"),
+    "Zephyr 7B Beta  (HuggingFace)":             ("hf",          "HuggingFaceH4/zephyr-7b-beta"),
+    "Phi-3 Mini  (HuggingFace)":                 ("hf",          "microsoft/Phi-3-mini-4k-instruct"),
 }
 
 T2I_MODELS = {
-    "DALL-E 3  (OpenAI)":   ("openai", "dall-e-3"),
-    "DALL-E 2  (OpenAI)":   ("openai", "dall-e-2"),
+    "DALL-E 3  (OpenAI)":                        ("openai", "dall-e-3"),
+    "DALL-E 2  (OpenAI)":                        ("openai", "dall-e-2"),
+    "FLUX.1-schnell  (HuggingFace)":             ("hf",     "black-forest-labs/FLUX.1-schnell"),
+    "Stable Diffusion XL  (HuggingFace)":        ("hf",     "stabilityai/stable-diffusion-xl-base-1.0"),
+    "Stable Diffusion v1.5  (HuggingFace)":      ("hf",     "runwayml/stable-diffusion-v1-5"),
 }
 
 I2T_MODELS = {
-    "Gemini 1.5 Flash  (Google)":          ("gemini", "gemini-1.5-flash"),
-    "Gemini 1.5 Pro  (Google)":            ("gemini", "gemini-1.5-pro"),
-    "GPT-4o  (OpenAI vision)":             ("openai", "gpt-4o"),
-    "GPT-4o-mini  (OpenAI vision)":        ("openai", "gpt-4o-mini"),
-    "Llama 3.2 Vision  (Ollama — local)":  ("ollama", "llama3.2-vision"),
-    "Qwen 2.5 VL  (Ollama — local)":       ("ollama", "qwen2.5vl"),
+    "Gemini 1.5 Flash  (Google)":                ("gemini", "gemini-1.5-flash"),
+    "Gemini 1.5 Pro  (Google)":                  ("gemini", "gemini-1.5-pro"),
+    "GPT-4o  (OpenAI vision)":                   ("openai", "gpt-4o"),
+    "GPT-4o-mini  (OpenAI vision)":              ("openai", "gpt-4o-mini"),
+    "Llama 3.2 Vision  (Ollama — local)":        ("ollama", "llama3.2-vision"),
+    "Qwen 2.5 VL  (Ollama — local)":             ("ollama", "qwen2.5vl"),
+    "BLIP Large  (HuggingFace)":                 ("hf",     "Salesforce/blip-image-captioning-large"),
+    "BLIP Base  (HuggingFace)":                  ("hf",     "Salesforce/blip-image-captioning-base"),
 }
 
 # value format  "tts_model:voice"
@@ -73,9 +85,11 @@ T2A_MODELS = {
 }
 
 A2T_MODELS = {
-    "Whisper-1  (OpenAI)":                      ("openai", "whisper-1"),
-    "Whisper Large v3  (Groq — fast)":           ("groq",   "whisper-large-v3"),
-    "Whisper Large v3 Turbo  (Groq — fastest)":  ("groq",   "whisper-large-v3-turbo"),
+    "Whisper-1  (OpenAI)":                       ("openai", "whisper-1"),
+    "Whisper Large v3  (Groq — fast)":            ("groq",   "whisper-large-v3"),
+    "Whisper Large v3 Turbo  (Groq — fastest)":   ("groq",   "whisper-large-v3-turbo"),
+    "Whisper Large v3  (HuggingFace)":            ("hf",     "openai/whisper-large-v3"),
+    "Whisper Medium  (HuggingFace)":              ("hf",     "openai/whisper-medium"),
 }
 
 T2V_MODELS = {
@@ -131,6 +145,16 @@ def run_text_to_text(prompt: str, model_label: str) -> str:
             )
             return resp.message.content
 
+        elif provider == "hf":
+            if hf_client is None:
+                return "HUGGINGFACE_API_KEY not set in .env"
+            result = hf_client.chat.completions.create(
+                model=model_id,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1024,
+            )
+            return result.choices[0].message.content
+
     except Exception as e:
         return f"Error ({model_label}): {e}"
 
@@ -148,6 +172,13 @@ def run_text_to_image(prompt: str, model_label: str):
             resp = openai_client.images.generate(model=model_id, prompt=prompt, size=size, n=1)
             img_bytes = requests.get(resp.data[0].url).content
             return Image.open(BytesIO(img_bytes))
+
+        elif provider == "hf":
+            if hf_client is None:
+                return None
+            image = hf_client.text_to_image(prompt, model=model_id)
+            return image
+
     except Exception as e:
         print(f"Error: {e}")
         return None
@@ -195,6 +226,12 @@ def run_image_to_text(image, model_label: str) -> str:
             )
             return resp.message.content
 
+        elif provider == "hf":
+            if hf_client is None:
+                return "HUGGINGFACE_API_KEY not set in .env"
+            result = hf_client.image_to_text(image, model=model_id)
+            return result
+
     except Exception as e:
         return f"Error ({model_label}): {e}"
 
@@ -237,6 +274,12 @@ def run_audio_to_text(audio_path: str, model_label: str) -> str:
             with open(audio_path, "rb") as f:
                 t = groq_client.audio.transcriptions.create(model=model_id, file=f)
             return t.text
+
+        elif provider == "hf":
+            if hf_client is None:
+                return "HUGGINGFACE_API_KEY not set in .env"
+            result = hf_client.automatic_speech_recognition(audio_path, model=model_id)
+            return result.text
 
     except Exception as e:
         return f"Error ({model_label}): {e}"
