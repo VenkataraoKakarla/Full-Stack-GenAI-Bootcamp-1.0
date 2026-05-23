@@ -9,7 +9,8 @@ import gradio as gr
 from dotenv import load_dotenv
 from PIL import Image
 import openai
-import google.generativeai as genai
+from google import genai
+import ollama as ollama_client
 
 # ---------------------------------------------------------------------------
 # Load API keys from root .env
@@ -17,9 +18,16 @@ import google.generativeai as genai
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# Groq — free key from console.groq.com, add GROQ_API_KEY to .env
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+groq_client = openai.OpenAI(
+    api_key=GROQ_API_KEY or "not-set",
+    base_url="https://api.groq.com/openai/v1",
+) if GROQ_API_KEY else None
 
 # ---------------------------------------------------------------------------
 # Modality 1 — Text → Text  (OpenAI GPT-4o-mini)
@@ -64,8 +72,10 @@ def image_to_text(image) -> str:
     if image is None:
         return "Please upload an image."
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        resp = model.generate_content(["Describe this image in detail.", image])
+        resp = gemini_client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=["Describe this image in detail.", image],
+        )
         return resp.text
     except Exception as e:
         return f"Error: {e}"
@@ -84,7 +94,7 @@ def text_to_audio(text: str):
             input=text,
         )
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-        resp.stream_to_file(tmp.name)
+        tmp.write(resp.content)
         return tmp.name
     except Exception as e:
         print(f"Error: {e}")
@@ -163,26 +173,89 @@ def video_to_text(video_path: str) -> str:
     if video_path is None:
         return "Please upload a video."
     try:
-        model = genai.GenerativeModel("gemini-1.5-pro")
-        video_file = genai.upload_file(video_path)
+        video_file = gemini_client.files.upload(file=video_path)
 
         # Wait for Gemini to finish processing the video
         for _ in range(30):
-            if video_file.state.name != "PROCESSING":
+            state = getattr(video_file.state, "name", str(video_file.state))
+            if state != "PROCESSING":
                 break
             time.sleep(3)
-            video_file = genai.get_file(video_file.name)
+            video_file = gemini_client.files.get(name=video_file.name)
 
-        if video_file.state.name == "FAILED":
+        state = getattr(video_file.state, "name", str(video_file.state))
+        if state == "FAILED":
             return "Video processing failed. Please try a shorter or smaller video."
 
-        resp = model.generate_content([
-            "Summarize this video. Describe what is happening, key details, and any notable moments.",
-            video_file,
-        ])
+        resp = gemini_client.models.generate_content(
+            model="gemini-1.5-pro",
+            contents=[
+                "Summarize this video. Describe what is happening, key details, and any notable moments.",
+                video_file,
+            ],
+        )
         return resp.text
     except Exception as e:
         return f"Error: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Modality 8 — Text → Text  (xAI Grok via OpenRouter)
+# ---------------------------------------------------------------------------
+def text_to_text_grok(prompt: str) -> str:
+    if not prompt.strip():
+        return "Please enter a prompt."
+    try:
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_KEY}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": "x-ai/grok-beta",
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=60)
+        data = resp.json()
+        if "choices" not in data:
+            return f"Error: {data}"
+        return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"Error: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Modality 9 — Audio → Text  (Groq Whisper-large-v3 — faster than OpenAI)
+# ---------------------------------------------------------------------------
+def audio_to_text_groq(audio_path: str) -> str:
+    if audio_path is None:
+        return "Please upload or record audio."
+    if groq_client is None:
+        return "GROQ_API_KEY not set. Get a free key at https://console.groq.com and add it to your .env file."
+    try:
+        with open(audio_path, "rb") as f:
+            transcript = groq_client.audio.transcriptions.create(
+                model="whisper-large-v3",
+                file=f,
+            )
+        return transcript.text
+    except Exception as e:
+        return f"Error: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Modality 10 — Text → Text  (Ollama local — llama3.2)
+# ---------------------------------------------------------------------------
+def text_to_text_ollama(prompt: str) -> str:
+    if not prompt.strip():
+        return "Please enter a prompt."
+    try:
+        resp = ollama_client.chat(
+            model="llama3.2",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return resp.message.content
+    except Exception as e:
+        return f"Error: {e}\n\nMake sure Ollama is running (check system tray) and llama3.2 is pulled."
 
 
 # ---------------------------------------------------------------------------
@@ -192,16 +265,19 @@ with gr.Blocks(title="Multimodal AI Explorer", theme=gr.themes.Soft()) as demo:
 
     gr.Markdown("""
     # Multimodal AI Explorer
-    Explore **7 AI modalities** powered by **OpenAI**, **Google Gemini**, and **OpenRouter**.
-    | Modality | Model | Provider |
-    |---|---|---|
-    | Text → Text | GPT-4o-mini | OpenAI |
-    | Text → Image | DALL-E 3 | OpenAI |
-    | Image → Text | Gemini 1.5 Flash | Google |
-    | Text → Audio | TTS-1 (Nova) | OpenAI |
-    | Audio → Text | Whisper-1 | OpenAI |
-    | Text → Video | minimax/video-01 | OpenRouter |
-    | Video → Text | Gemini 1.5 Pro | Google |
+    Explore **10 AI modalities** powered by **OpenAI**, **Google Gemini**, **OpenRouter**, **xAI Grok**, **Groq**, and **Ollama (local)**.
+    | # | Modality | Model | Provider |
+    |---|---|---|---|
+    | 1 | Text → Text | GPT-4o-mini | OpenAI |
+    | 2 | Text → Image | DALL-E 3 | OpenAI |
+    | 3 | Image → Text | Gemini 1.5 Flash | Google |
+    | 4 | Text → Audio | TTS-1 (Nova) | OpenAI |
+    | 5 | Audio → Text | Whisper-1 | OpenAI |
+    | 6 | Text → Video | minimax/video-01 | OpenRouter |
+    | 7 | Video → Text | Gemini 1.5 Pro | Google |
+    | 8 | Text → Text (Grok) | grok-beta | xAI via OpenRouter |
+    | 9 | Audio → Text (Groq) | whisper-large-v3 | Groq |
+    | 10 | Text → Text (Ollama) | llama3.2 | Local / Ollama |
     """)
 
     with gr.Tabs():
@@ -288,6 +364,42 @@ with gr.Blocks(title="Multimodal AI Explorer", theme=gr.themes.Soft()) as demo:
                 with gr.Column():
                     v2t_out = gr.Textbox(label="Video Summary", lines=12)
             v2t_btn.click(video_to_text, inputs=v2t_in, outputs=v2t_out)
+
+        # --- Tab 8: Text → Text (Grok via OpenRouter) ---
+        with gr.Tab("Text → Text (Grok)"):
+            gr.Markdown("### xAI Grok-beta (via OpenRouter) — Reasoning & Chat\n_Uses your existing OpenRouter key — no extra signup needed._")
+            with gr.Row():
+                with gr.Column():
+                    grok_in = gr.Textbox(label="Your prompt", lines=4,
+                                         placeholder="What's the difference between Grok and GPT-4o?")
+                    grok_btn = gr.Button("Ask Grok", variant="primary")
+                with gr.Column():
+                    grok_out = gr.Textbox(label="Grok Response", lines=10)
+            grok_btn.click(text_to_text_grok, inputs=grok_in, outputs=grok_out)
+
+        # --- Tab 9: Audio → Text (Groq fast Whisper) ---
+        with gr.Tab("Audio → Text (Groq)"):
+            gr.Markdown("""### Groq — whisper-large-v3 (Ultra-fast Transcription)
+_Requires a free `GROQ_API_KEY` from [console.groq.com](https://console.groq.com) — add it to your `.env` file._""")
+            with gr.Row():
+                with gr.Column():
+                    groq_audio_in = gr.Audio(label="Upload or Record Audio", type="filepath")
+                    groq_audio_btn = gr.Button("Transcribe with Groq", variant="primary")
+                with gr.Column():
+                    groq_audio_out = gr.Textbox(label="Transcription", lines=10)
+            groq_audio_btn.click(audio_to_text_groq, inputs=groq_audio_in, outputs=groq_audio_out)
+
+        # --- Tab 10: Text → Text (Ollama local) ---
+        with gr.Tab("Text → Text (Ollama)"):
+            gr.Markdown("### llama3.2 — Local Inference via Ollama (no API key needed)\n_Runs entirely on your machine. Make sure Ollama is running in the system tray._")
+            with gr.Row():
+                with gr.Column():
+                    ollama_in = gr.Textbox(label="Your prompt", lines=4,
+                                           placeholder="Tell me a fun fact about space...")
+                    ollama_btn = gr.Button("Ask Llama 3.2", variant="primary")
+                with gr.Column():
+                    ollama_out = gr.Textbox(label="Response", lines=10)
+            ollama_btn.click(text_to_text_ollama, inputs=ollama_in, outputs=ollama_out)
 
 if __name__ == "__main__":
     demo.launch(share=False)
