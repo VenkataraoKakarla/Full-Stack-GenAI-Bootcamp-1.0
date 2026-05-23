@@ -36,3 +36,11 @@ Add the following as **Secrets** in your Space settings:
 | `GROQ_API_KEY` | console.groq.com (free) |
 
 > Note: Ollama tabs require a local Ollama server and will not work on HuggingFace Spaces.
+
+cd "D:\Full-Stack-GenAI-Bootcamp-1.0\Assignment-App building"
+git init
+git add app.py requirements.txt README.md
+git commit -m "Initial deployment"
+git remote add space https://huggingface.co/spaces/VenkataraoKakarla/multimodal-ai-explorer
+git push space main
+

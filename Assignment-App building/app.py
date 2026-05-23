@@ -21,14 +21,14 @@ from huggingface_hub import InferenceClient
 _env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=_env_path if _env_path.exists() else None)
 
-openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY") or "not-configured")
+gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or "not-configured")
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 groq_client = openai.OpenAI(
-    api_key=GROQ_API_KEY or "not-set",
+    api_key=GROQ_API_KEY or "not-configured",
     base_url="https://api.groq.com/openai/v1",
 ) if GROQ_API_KEY else None
 
