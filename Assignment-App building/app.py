@@ -477,4 +477,9 @@ with gr.Blocks(title="Multimodal AI Explorer", theme=gr.themes.Soft()) as demo:
             v2t_btn.click(run_video_to_text, inputs=[v2t_in, v2t_model], outputs=v2t_out)
 
 if __name__ == "__main__":
-    demo.launch(share=False)
+    import os
+    # On HF Spaces AUTH env var protects the app; locally runs open
+    auth_user = os.getenv("APP_USERNAME")
+    auth_pass = os.getenv("APP_PASSWORD")
+    auth = (auth_user, auth_pass) if auth_user and auth_pass else None
+    demo.launch(auth=auth)
