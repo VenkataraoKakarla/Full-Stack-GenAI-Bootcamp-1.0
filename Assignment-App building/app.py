@@ -52,10 +52,12 @@ T2I_MODELS = {
 }
 
 I2T_MODELS = {
-    "Gemini 1.5 Flash  (Google)":   ("gemini", "gemini-1.5-flash"),
-    "Gemini 1.5 Pro  (Google)":     ("gemini", "gemini-1.5-pro"),
-    "GPT-4o  (OpenAI vision)":      ("openai", "gpt-4o"),
-    "GPT-4o-mini  (OpenAI vision)": ("openai", "gpt-4o-mini"),
+    "Gemini 1.5 Flash  (Google)":          ("gemini", "gemini-1.5-flash"),
+    "Gemini 1.5 Pro  (Google)":            ("gemini", "gemini-1.5-pro"),
+    "GPT-4o  (OpenAI vision)":             ("openai", "gpt-4o"),
+    "GPT-4o-mini  (OpenAI vision)":        ("openai", "gpt-4o-mini"),
+    "Llama 3.2 Vision  (Ollama — local)":  ("ollama", "llama3.2-vision"),
+    "Qwen 2.5 VL  (Ollama — local)":       ("ollama", "qwen2.5vl"),
 }
 
 # value format  "tts_model:voice"
@@ -179,6 +181,19 @@ def run_image_to_text(image, model_label: str) -> str:
                 }],
             )
             return resp.choices[0].message.content
+
+        elif provider == "ollama":
+            buf = BytesIO()
+            image.save(buf, format="JPEG")
+            resp = ollama_client.chat(
+                model=model_id,
+                messages=[{
+                    "role": "user",
+                    "content": "Describe this image in detail.",
+                    "images": [buf.getvalue()],
+                }],
+            )
+            return resp.message.content
 
     except Exception as e:
         return f"Error ({model_label}): {e}"
