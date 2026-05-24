@@ -9,6 +9,7 @@ app_file: app_v3_hf_only.py
 pinned: false
 ---
 
+
 # Multimodal AI Explorer
 
 A web application that lets you explore **7 AI modalities** with **selectable models** across multiple providers — all from one UI.
