@@ -60,12 +60,19 @@ def run_text_to_text(prompt: str, model_label: str, token: str) -> str:
         return "Please enter a prompt."
     try:
         client = _client(token)
-        result = client.chat.completions.create(
-            model=T2T_MODELS[model_label],
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
-        )
-        return result.choices[0].message.content
+        try:
+            result = client.chat.completions.create(
+                model=T2T_MODELS[model_label],
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1024,
+            )
+            return result.choices[0].message.content
+        except Exception:
+            return client.text_generation(
+                prompt,
+                model=T2T_MODELS[model_label],
+                max_new_tokens=1024,
+            )
     except Exception as e:
         return f"Error: {e}"
 
