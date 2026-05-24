@@ -10,6 +10,7 @@ Only safe modalities included (rate-limited, no credit consumption):
 Image Generation is intentionally excluded — FLUX / SDXL consume HF credits.
 """
 
+from io import BytesIO
 import gradio as gr
 from huggingface_hub import InferenceClient
 
@@ -84,7 +85,10 @@ def run_image_to_text(image, model_label: str, token: str) -> str:
         return "Please upload an image."
     try:
         client = _client(token)
-        return client.image_to_text(image, model=I2T_MODELS[model_label])
+        buf = BytesIO()
+        image.save(buf, format="JPEG")
+        result = client.image_to_text(buf.getvalue(), model=I2T_MODELS[model_label])
+        return result
     except Exception as e:
         return f"Error: {e}"
 
