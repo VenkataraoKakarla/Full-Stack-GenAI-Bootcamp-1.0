@@ -388,7 +388,7 @@ def run_video_to_text(video_path: str, model_label: str, keys: dict) -> str:
 # ---------------------------------------------------------------------------
 # Gradio UI
 # ---------------------------------------------------------------------------
-with gr.Blocks(title="Multimodal AI Explorer v2", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="Multimodal AI Explorer v2") as demo:
 
     # Per-session state — keys are never shared between users
     session_keys = gr.State({})
@@ -522,4 +522,4 @@ with gr.Blocks(title="Multimodal AI Explorer v2", theme=gr.themes.Soft()) as dem
             v2t_btn.click(run_video_to_text, inputs=[v2t_in, v2t_model, session_keys], outputs=v2t_out)
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(theme=gr.themes.Soft())

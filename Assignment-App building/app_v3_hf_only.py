@@ -100,7 +100,7 @@ def run_audio_to_text(audio_path: str, model_label: str, token: str) -> str:
 # ---------------------------------------------------------------------------
 # Gradio UI
 # ---------------------------------------------------------------------------
-with gr.Blocks(title="Multimodal AI — HuggingFace Edition", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="Multimodal AI — HuggingFace Edition") as demo:
 
     # Per-session token state
     session_token = gr.State("")
@@ -204,4 +204,4 @@ with gr.Blocks(title="Multimodal AI — HuggingFace Edition", theme=gr.themes.So
             )
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(theme=gr.themes.Soft())

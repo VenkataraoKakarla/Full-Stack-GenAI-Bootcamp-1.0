@@ -355,7 +355,7 @@ def run_video_to_text(video_path: str, model_label: str) -> str:
 # ---------------------------------------------------------------------------
 # Gradio UI
 # ---------------------------------------------------------------------------
-with gr.Blocks(title="Multimodal AI Explorer", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="Multimodal AI Explorer") as demo:
 
     gr.Markdown("""
     # Multimodal AI Explorer
@@ -478,8 +478,7 @@ with gr.Blocks(title="Multimodal AI Explorer", theme=gr.themes.Soft()) as demo:
 
 if __name__ == "__main__":
     import os
-    # On HF Spaces AUTH env var protects the app; locally runs open
     auth_user = os.getenv("APP_USERNAME")
     auth_pass = os.getenv("APP_PASSWORD")
     auth = (auth_user, auth_pass) if auth_user and auth_pass else None
-    demo.launch(auth=auth)
+    demo.launch(auth=auth, theme=gr.themes.Soft())
